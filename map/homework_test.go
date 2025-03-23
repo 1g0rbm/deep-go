@@ -9,32 +9,154 @@ import (
 
 // go test -v homework_test.go
 
+type Node struct {
+	Key   int
+	Value int
+
+	Left  *Node
+	Right *Node
+}
+
+func inorderTraverse(node *Node, action func(int, int)) {
+	if node == nil {
+		return
+	}
+
+	inorderTraverse(node.Left, action)
+	action(node.Key, node.Value)
+	inorderTraverse(node.Right, action)
+}
+
 type OrderedMap struct {
-	// need to implement
+	bst *Node
+
+	size int
 }
 
 func NewOrderedMap() OrderedMap {
-	return OrderedMap{} // need to implement
+	return OrderedMap{
+		size: 0,
+	}
 }
 
 func (m *OrderedMap) Insert(key, value int) {
-	// need to implement
+	if m.bst == nil {
+		m.bst = &Node{
+			Key:   key,
+			Value: value,
+		}
+	} else {
+		curr := m.bst
+		for curr != nil {
+			if key > curr.Key {
+				if curr.Right == nil {
+					curr.Right = &Node{Key: key, Value: value}
+					break
+				}
+				curr = curr.Right
+			} else if key < curr.Key {
+				if curr.Left == nil {
+					curr.Left = &Node{Key: key, Value: value}
+					break
+				}
+				curr = curr.Left
+			} else {
+				curr.Value = value
+				return
+			}
+		}
+	}
+
+	m.size += 1
 }
 
 func (m *OrderedMap) Erase(key int) {
-	// need to implement
+	var (
+		curr, parent *Node = m.bst, nil
+	)
+	for curr != nil && curr.Key != key {
+		parent = curr
+		if key > curr.Key {
+			curr = curr.Right
+		} else if key < curr.Key {
+			curr = curr.Left
+		}
+	}
+
+	if curr == nil {
+		return
+	}
+
+	m.size -= 1
+
+	if curr.Right == nil && curr.Left == nil {
+		if parent == nil {
+			m.bst = nil
+		} else if parent.Left == curr {
+			parent.Left = nil
+		} else {
+			parent.Right = nil
+		}
+		return
+	}
+
+	if curr.Right == nil || curr.Left != nil {
+		child := &Node{}
+		if curr.Left != nil {
+			child = curr.Left
+		} else {
+			child = curr.Right
+		}
+
+		if parent == nil {
+			m.bst = child
+		} else if parent.Left == curr {
+			parent.Left = child
+		} else {
+			parent.Right = child
+		}
+
+		return
+	}
+
+	var (
+		min, minParent *Node = curr.Right, curr
+	)
+	for min.Left != nil {
+		minParent = min
+		min = min.Left
+	}
+
+	curr.Key = min.Key
+	curr.Value = min.Value
+	if minParent.Left == min {
+		minParent.Left = min.Right
+	} else {
+		minParent.Right = min.Right
+	}
 }
 
 func (m *OrderedMap) Contains(key int) bool {
-	return false // need to implement
+	next := m.bst
+	for next != nil {
+		if key > next.Key {
+			next = next.Right
+		} else if key < next.Key {
+			next = next.Left
+		} else {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (m *OrderedMap) Size() int {
-	return 0 // need to implement
+	return m.size
 }
 
 func (m *OrderedMap) ForEach(action func(int, int)) {
-	// need to implement
+	inorderTraverse(m.bst, action)
 }
 
 func TestCircularQueue(t *testing.T) {
