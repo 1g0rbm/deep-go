@@ -12,7 +12,7 @@ func Map[T any, R any](data []T, action func(T) R) []R {
 		return nil
 	}
 
-	res := make([]R, 0)
+	res := make([]R, 0, cap(data))
 	for _, v := range data {
 		res = append(res, action(v))
 	}
