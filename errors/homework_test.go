@@ -2,7 +2,7 @@ package main
 
 import (
 	"errors"
-	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -11,112 +11,97 @@ import (
 
 // go test -v homework_test.go
 
-type multiErrorNode struct {
-	err  error
-	next error
-}
-
-func (n *multiErrorNode) Error() string {
-	return n.err.Error()
-}
-
-func (n *multiErrorNode) Unwrap() error {
-	return n.next
-}
-
-func (n *multiErrorNode) Is(target error) bool {
-	return errors.Is(n.err, target)
-}
-
-func (n *multiErrorNode) As(target interface{}) bool {
-	return errors.As(n.err, target)
-}
-
 type MultiError struct {
-	head *multiErrorNode
-	len  int
+	errors []error
 }
 
-func (e *MultiError) Error() string {
-	if e == nil || e.head == nil {
-		return ""
+func (m *MultiError) Unwrap() error {
+	if m == nil || len(m.errors) == 0 {
+		return nil
 	}
 
-	var msgs []string
-	for node := e.head; node != nil; node = node.next.(*multiErrorNode) {
-		msgs = append(msgs, fmt.Sprintf("* %s", node.err.Error()))
-		if node.next == nil {
-			break
+	errs := m.errors[1:]
+	if len(errs) == 1 {
+		return errs[0]
+	}
+
+	return &MultiError{
+		errors: errs,
+	}
+}
+
+func (m *MultiError) Error() string {
+	length := len(m.errors)
+	if length == 0 {
+		return "no errors"
+	}
+
+	if length == 1 {
+		return m.errors[0].Error()
+	}
+
+	var builder strings.Builder
+	builder.WriteString(strconv.FormatInt(int64(length), 10))
+	builder.WriteString(" errors occurred:\n")
+	for _, err := range m.errors {
+		builder.WriteString("\t* ")
+		builder.WriteString(err.Error())
+	}
+	builder.WriteString("\n")
+
+	return builder.String()
+}
+
+func (m *MultiError) Is(target error) bool {
+	if m == nil {
+		return m == target
+	}
+
+	for _, err := range m.errors {
+		if errors.Is(err, target) {
+			return true
 		}
 	}
 
-	if len(msgs) == 1 {
-		return fmt.Sprintf("1 error occurred:\n\t%s\n", msgs[0])
-	}
-
-	return fmt.Sprintf("%d errors occurred:\n\t%s\n", len(msgs), strings.Join(msgs, "\t"))
+	return false
 }
 
-func (e *MultiError) Unwrap() error {
-	if e == nil || e.head == nil {
-		return nil
+func (m *MultiError) As(target any) bool {
+	if m == nil {
+		return m == target
 	}
-	return e.head
+
+	for _, err := range m.errors {
+		if errors.As(err, target) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func Append(err error, errs ...error) *MultiError {
-	var root *multiErrorNode
-	var last *multiErrorNode
-	length := 0
-
-	appendOne := func(e error) {
-		if e == nil {
-			return
-		}
-		node := &multiErrorNode{err: e}
-		if root == nil {
-			root = node
-			last = node
-		} else {
-			last.next = node
-			last = node
-		}
-		length++
-	}
-
-	if err != nil {
-		if me, ok := err.(*MultiError); ok && me != nil {
-			for node := me.head; node != nil; node = node.next.(*multiErrorNode) {
-				appendOne(node.err)
-				if node.next == nil {
-					break
-				}
-			}
-		} else {
-			appendOne(err)
-		}
-	}
-
-	for _, e := range errs {
-		if e == nil {
-			continue
-		}
-		if me, ok := e.(*MultiError); ok && me != nil {
-			for node := me.head; node != nil; node = node.next.(*multiErrorNode) {
-				appendOne(node.err)
-				if node.next == nil {
-					break
-				}
-			}
-		} else {
-			appendOne(e)
-		}
-	}
-
-	if length == 0 {
+	if err == nil && len(errs) == 0 {
 		return nil
 	}
-	return &MultiError{head: root, len: length}
+
+	if err == nil {
+		return &MultiError{
+			errors: errs,
+		}
+	}
+
+	mErr, ok := err.(*MultiError)
+	if !ok {
+		mErr = &MultiError{
+			errors: make([]error, 0, len(errs)+1),
+		}
+		mErr.errors = append(mErr.errors, err)
+	}
+
+	mErr.errors = append(mErr.errors, errs...)
+
+	return mErr
 }
 
 func TestMultiError(t *testing.T) {
@@ -136,12 +121,19 @@ func TestMultiError_Unwrap(t *testing.T) {
 	merr := Append(nil, err1, err2, err3)
 
 	var current error = merr
-	for _, expected := range []error{err1, err2, err3} {
-		current = errors.Unwrap(current)
-		assert.Equal(t, expected.Error(), current.Error())
-	}
+	assert.NotNil(t, current, "current error should not be nil")
+	assert.Equal(t, "3 errors occurred:\n\t* err1\t* err2\t* err3\n", current.Error())
 
-	assert.Nil(t, errors.Unwrap(current), "should be nil at the end")
+	current = errors.Unwrap(current)
+	assert.NotNil(t, current, "current error should not be nil")
+	assert.Equal(t, "2 errors occurred:\n\t* err2\t* err3\n", current.Error())
+
+	current = errors.Unwrap(current)
+	assert.NotNil(t, current, "current error should not be nil")
+	assert.Equal(t, "err3", current.Error())
+
+	current = errors.Unwrap(current)
+	assert.Nil(t, current, "should be nil at the end")
 }
 
 func TestMultiError_Is(t *testing.T) {
