@@ -11,9 +11,23 @@ import (
 
 // go test -v homework_test.go
 
+func dfs(addr uintptr, visited map[uintptr]struct{}, result *[]uintptr) {
+	if addr == 0 {
+		return
+	}
+
+	if _, ok := visited[addr]; ok {
+		return
+	}
+
+	visited[addr] = struct{}{}
+	*result = append(*result, addr)
+
+	dfs(*(*uintptr)(unsafe.Pointer(addr)), visited, result)
+}
+
 func Trace(stacks [][]uintptr) []uintptr {
 	visited := make(map[uintptr]struct{})
-	toVisit := make([]uintptr, 0)
 	result := make([]uintptr, 0)
 
 	for _, stack := range stacks {
@@ -22,31 +36,8 @@ func Trace(stacks [][]uintptr) []uintptr {
 				continue
 			}
 
-			if _, ok := visited[addr]; ok {
-				continue
-			}
-
-			visited[addr] = struct{}{}
-			result = append(result, addr)
-			toVisit = append(toVisit, addr)
+			dfs(addr, visited, &result)
 		}
-	}
-
-	for len(toVisit) > 0 {
-		addr := toVisit[0]
-		toVisit = toVisit[1:]
-
-		next := *(*uintptr)(unsafe.Pointer(addr))
-		if next == 0 {
-			continue
-		}
-		if _, ok := visited[next]; ok {
-			continue
-		}
-
-		visited[next] = struct{}{}
-		result = append(result, next)
-		toVisit = append(toVisit, next)
 	}
 
 	return result
