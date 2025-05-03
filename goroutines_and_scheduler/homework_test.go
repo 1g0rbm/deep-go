@@ -1,94 +1,48 @@
 package main
 
 import (
+	"container/heap"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-type Heap struct {
-	queue         []Task
-	idxToPosition map[int]int
+type Queue []*Task
+
+func (q Queue) Len() int {
+	return len(q)
 }
 
-func (h *Heap) Push(task Task) {
-	h.queue = append(h.queue, task)
-	h.idxToPosition[task.Identifier] = len(h.queue) - 1
-	h.up(len(h.queue) - 1)
+func (q Queue) Less(i, j int) bool {
+	return q[i].Priority > q[j].Priority
 }
 
-func (h *Heap) Pop() Task {
-	if len(h.queue) == 0 {
-		return Task{}
-	}
+func (q Queue) Swap(i, j int) {
+	q[i], q[j] = q[j], q[i]
+}
 
-	task := h.queue[0]
-	h.queue[0] = h.queue[len(h.queue)-1]
-	h.queue = h.queue[:len(h.queue)-1]
-	delete(h.idxToPosition, task.Identifier)
+func (q *Queue) Push(x interface{}) {
+	task := x.(*Task)
 
-	h.down(0)
+	*q = append(*q, task)
+}
+
+func (q *Queue) Pop() interface{} {
+	old := *q
+	n := len(old)
+	task := old[n-1]
+	*q = old[0 : n-1]
 
 	return task
 }
 
-func (h *Heap) Update(taskID int, newPriority int) {
-	i, ok := h.idxToPosition[taskID]
-	if !ok {
-		return
-	}
-
-	oldPriority := h.queue[i].Priority
-	h.queue[i].Priority = newPriority
-	if newPriority > oldPriority {
-		h.up(i)
-	} else if newPriority < oldPriority {
-		h.down(i)
-	}
-}
-
-func (h *Heap) down(currIdx int) {
-	for currIdx < len(h.queue) {
-		leftIdx := 2*currIdx + 1
-		rightIdx := 2*currIdx + 2
-
-		if leftIdx > len(h.queue)-1 {
-			break
+func (q *Queue) Update(taskID int, newPriority int) {
+	for i, task := range *q {
+		if task.Identifier == taskID {
+			task.Priority = newPriority
+			heap.Fix(q, i)
+			return
 		}
-
-		var toSwapIdx int
-		if rightIdx >= len(h.queue) || h.queue[leftIdx].Priority > h.queue[rightIdx].Priority {
-			toSwapIdx = leftIdx
-		} else {
-			toSwapIdx = rightIdx
-		}
-
-		if h.queue[currIdx].Priority > h.queue[toSwapIdx].Priority {
-			break
-		}
-
-		h.idxToPosition[h.queue[currIdx].Identifier] = toSwapIdx
-		h.idxToPosition[h.queue[toSwapIdx].Identifier] = currIdx
-		h.queue[toSwapIdx], h.queue[currIdx] = h.queue[currIdx], h.queue[toSwapIdx]
-
-		currIdx = toSwapIdx
-	}
-}
-
-func (h *Heap) up(currIdx int) {
-	for currIdx > 0 {
-		parentIdx := (currIdx - 1) / 2
-		current := h.queue[currIdx]
-		parent := h.queue[parentIdx]
-		if parent.Priority > current.Priority {
-			break
-		}
-
-		h.idxToPosition[current.Identifier] = parentIdx
-		h.idxToPosition[parent.Identifier] = currIdx
-		h.queue[parentIdx], h.queue[currIdx] = h.queue[currIdx], h.queue[parentIdx]
-
-		currIdx = parentIdx
 	}
 }
 
@@ -98,28 +52,29 @@ type Task struct {
 }
 
 type Scheduler struct {
-	heap Heap
+	heap *Queue
 }
 
 func NewScheduler() Scheduler {
+	queue := &Queue{}
+	heap.Init(queue)
+
 	return Scheduler{
-		heap: Heap{
-			queue:         []Task{},
-			idxToPosition: make(map[int]int),
-		},
+		heap: queue,
 	}
 }
 
 func (s *Scheduler) AddTask(task Task) {
-	s.heap.Push(task)
+	t := &task
+	heap.Push(s.heap, t)
+}
+
+func (s *Scheduler) GetTask() Task {
+	return *heap.Pop(s.heap).(*Task)
 }
 
 func (s *Scheduler) ChangeTaskPriority(taskID int, newPriority int) {
 	s.heap.Update(taskID, newPriority)
-}
-
-func (s *Scheduler) GetTask() Task {
-	return s.heap.Pop()
 }
 
 func TestTrace(t *testing.T) {
