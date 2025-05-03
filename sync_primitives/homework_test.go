@@ -17,7 +17,7 @@ type RWMutex struct {
 	readers  int
 
 	writeCond      *sync.Cond
-	writers        int
+	write          bool
 	waitingWriters int
 }
 
@@ -34,11 +34,11 @@ func (m *RWMutex) Lock() {
 	defer func() {
 		m.mutex.Unlock()
 		m.waitingWriters--
-		m.writers = 1
+		m.write = true
 	}()
 
 	m.waitingWriters++
-	for m.readers > 0 || m.writers > 0 {
+	for m.readers > 0 || m.write {
 		m.writeCond.Wait()
 	}
 }
@@ -47,7 +47,7 @@ func (m *RWMutex) Unlock() {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	m.writers = 0
+	m.write = false
 	if m.waitingWriters > 0 {
 		m.writeCond.Signal()
 	} else {
@@ -59,7 +59,7 @@ func (m *RWMutex) RLock() {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	for m.writers > 0 || m.waitingWriters > 0 {
+	for m.write || m.waitingWriters > 0 {
 		m.readCond.Wait()
 	}
 
